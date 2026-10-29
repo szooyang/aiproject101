@@ -1,5 +1,5 @@
 
-import streamlit as st
+import streamlit as 
 
 st.set_page_config(
     page_title="MBTI 진로 탐험소",
