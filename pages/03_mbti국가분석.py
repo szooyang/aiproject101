@@ -29,7 +29,7 @@ st.divider()
 
 @st.cache_data
 def load_data():
-    file_name = "countriesMBTI_16types(5).csv"
+    file_name = "countriesMBTI_16types.csv"
 
     try:
         df = pd.read_csv(file_name, encoding="utf-8-sig")
