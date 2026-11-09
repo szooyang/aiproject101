@@ -15,35 +15,39 @@ st.set_page_config(
 st.title("🌡️ 월별 기온분석")
 st.write("원하는 월을 선택하면 전체 연도의 최고기온과 최저기온을 비교합니다.")
 
-# CSV 파일 경로 찾기
-file_name = "temperature.csv"
-
+# CSV 파일 경로 설정
+# 현재 파이썬 파일은 pages 폴더에 있고,
+# CSV 파일은 상위 폴더에 있음
 current_folder = Path(__file__).resolve().parent
-
-possible_paths = [
-    current_folder / file_name,
-    current_folder.parent / file_name
-]
-
-file_path = None
-
-for path in possible_paths:
-    if path.exists():
-        file_path = path
-        break
+file_path = current_folder.parent / "temperature.csv"
 
 # CSV 파일 읽기
-if file_path is None:
-    st.error("CSV 파일을 찾을 수 없습니다. temperature(1).csv 파일의 위치를 확인해주세요.")
+if not file_path.exists():
+    st.error("temperature.csv 파일을 찾을 수 없습니다.")
+    st.info("CSV 파일이 pages 폴더의 상위 폴더에 있는지 확인해주세요.")
     st.stop()
 
 try:
     df = pd.read_csv(file_path, encoding="cp949")
 except UnicodeDecodeError:
-    df = pd.read_csv(file_path, encoding="utf-8-sig")
+    try:
+        df = pd.read_csv(file_path, encoding="utf-8-sig")
+    except Exception as e:
+        st.error(f"CSV 파일을 읽는 중 오류가 발생했습니다: {e}")
+        st.stop()
+except Exception as e:
+    st.error(f"CSV 파일을 읽는 중 오류가 발생했습니다: {e}")
+    st.stop()
 
 # 필요한 열만 선택
-df = df[["일시", "최고기온(℃)", "최저기온(℃)"]].copy()
+required_columns = ["일시", "최고기온(℃)", "최저기온(℃)"]
+
+if not all(col in df.columns for col in required_columns):
+    st.error("CSV 파일에 필요한 열이 없습니다.")
+    st.write("현재 CSV 열 이름:", df.columns.tolist())
+    st.stop()
+
+df = df[required_columns].copy()
 
 # 월 영문 약자를 숫자로 변환
 month_dict = {
@@ -54,16 +58,18 @@ month_dict = {
 }
 
 # 일시에서 연도와 월 추출
-df["월영문"] = df["일시"].str[:3]
+df["월영문"] = df["일시"].astype(str).str[:3]
+
 df["연도"] = pd.to_numeric(
-    df["일시"].str[-2:],
+    df["일시"].astype(str).str[-2:],
     errors="coerce"
 )
 
 # 2자리 연도를 4자리 연도로 변환
 df["연도"] = df["연도"].apply(
     lambda x: int(x) + 2000 if pd.notna(x) and x <= 26
-    else (int(x) + 1900 if pd.notna(x) else None)
+    else int(x) + 1900 if pd.notna(x)
+    else None
 )
 
 df["월"] = df["월영문"].map(month_dict)
@@ -77,7 +83,7 @@ df["최저기온(℃)"] = pd.to_numeric(
     df["최저기온(℃)"], errors="coerce"
 )
 
-# 잘못된 날짜 데이터 제거
+# 날짜 정보가 없는 행 제거
 df = df.dropna(subset=["연도", "월"])
 
 # 월 선택
@@ -94,11 +100,10 @@ selected_month = st.selectbox(
     format_func=lambda x: month_names[x]
 )
 
-# 선택한 월의 데이터만 추출
+# 선택한 월의 데이터 추출
 month_df = df[df["월"] == selected_month].copy()
 
-# 같은 연도와 월에 데이터가 여러 개 있으면 평균 계산
-# 결측치는 각 기온 항목별로 자동 제외
+# 같은 연도에 여러 자료가 있으면 평균 계산
 result = (
     month_df.groupby("연도")[
         ["최고기온(℃)", "최저기온(℃)"]
@@ -108,7 +113,7 @@ result = (
     .sort_values("연도")
 )
 
-# 그래프
+# 그래프 출력
 st.subheader(f"📊 {month_names[selected_month]} 월별 기온분석")
 
 if result.empty:
@@ -117,7 +122,7 @@ if result.empty:
 else:
     fig = go.Figure()
 
-    # 최고기온 그래프
+    # 최고기온: 핫핑크
     fig.add_trace(
         go.Scatter(
             x=result["연도"],
@@ -129,7 +134,7 @@ else:
         )
     )
 
-    # 최저기온 그래프
+    # 최저기온: 하늘색
     fig.add_trace(
         go.Scatter(
             x=result["연도"],
@@ -156,17 +161,17 @@ else:
         height=550
     )
 
-    # 그래프 출력
-    st.plotly_chart(fig, use_container_width=True)
+    # 그래프 표시
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
-    # 데이터 표 출력
-    st.subheader("📋 분석 데이터")
+    # 데이터 표
+    st.subheader("📋 연도별 기온 데이터")
+
     st.dataframe(
-        result.rename(columns={
-            "연도": "연도",
-            "최고기온(℃)": "최고기온(℃)",
-            "최저기온(℃)": "최저기온(℃)"
-        }).style.format({
+        result.style.format({
             "최고기온(℃)": "{:.1f}",
             "최저기온(℃)": "{:.1f}"
         }),
@@ -174,8 +179,8 @@ else:
         hide_index=True
     )
 
-    # 간단한 통계
-    st.subheader("📈 선택한 월의 기온 통계")
+    # 기온 통계
+    st.subheader("📈 선택한 월의 평균 기온")
 
     col1, col2 = st.columns(2)
 
