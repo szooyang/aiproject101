@@ -16,7 +16,7 @@ st.title("🌡️ 월별 기온분석")
 st.write("원하는 월을 선택하면 전체 연도의 최고기온과 최저기온을 비교합니다.")
 
 # CSV 파일 경로 찾기
-file_name = "temperature(1).csv"
+file_name = "temperature.csv"
 
 current_folder = Path(__file__).resolve().parent
 
